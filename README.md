@@ -36,11 +36,12 @@
   Chromium 目标、不支持的拖拽），helper 返回 `background_unavailable: true` 并说明原因，
   可直接对单个动作改用 `"dispatch": "foreground"`（真实 SendInput，带回前台并回报
   `focus_ok`）。
-- 不干扰你正常使用：不弹出任何窗口、不抢真实键鼠。
+- **不干扰你正常使用**：不抢真实键鼠、不把目标窗口带回前台。默认会在 AI 即将点击/输入的位置显示一个**小号点击穿透的鼠标指针箭头**（默认开；你在意就在动作上传 `overlay: false` 隐藏）。它绝不取焦点、点击可穿透，且**不淡出**，只随下一个动作点移动到新位置。
 
 | 参数 | 默认 | 说明 |
 |------|------|------|
 | `dispatch` | `background` | `background` 后台合成光标输入；`foreground` 真实 SendInput |
+| `overlay` | `true` | 真实键鼠不动的前提下，在动作点显示/隐藏小号点击穿透指针箭头（`overlay: false` 隐藏） |
 
 ## 架构
 
