@@ -1,0 +1,9 @@
+# awesome-dsh-plugin 收录条目草稿（data/plugins/JeremyWangCY__dsh-computer-use-windows.yml）
+# 注意：收录要求仓库为公开、创建满 1 天、>=10 个 commit、package.json 声明 dsh.bundle（已满足）。
+# 当前仓库为私有（自用），转为公开并达标后再提交以下内容。
+url: https://github.com/JeremyWangCY/dsh-computer-use-windows
+name: JeremyWangCY/dsh-computer-use-windows
+category: tools
+description:
+  en: Windows computer-use for DeepSeek Harness: UIA accessibility tree, PrintWindow screenshots and real SendInput mouse/keyboard (list_apps, get_app_state, click, type, key, scroll, drag).
+  zh: 适用于 Windows 的 DeepSeek Harness 电脑操作插件：UIA 无障碍树 + PrintWindow 截图 + SendInput 真实键鼠输入（list_apps/get_app_state/点击/输入/按键/滚动/拖拽）。
