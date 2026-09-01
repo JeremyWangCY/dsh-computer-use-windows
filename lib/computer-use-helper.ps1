@@ -108,7 +108,8 @@ public static class DshWin32
 
   public static void ForceForeground(IntPtr h)
   {
-    ShowWindow(h, 9);
+    // only restore MINIMIZED windows; never SW_RESTORE a visible/maximized window (would un-maximize it)
+    if (IsIconic(h)) ShowWindow(h, 9);
     INPUT[] alt = new INPUT[] { MkKey(0x12, 0), MkKey(0x12, 2) };
     SendInput(2, alt, Marshal.SizeOf(typeof(INPUT)));
     System.Threading.Thread.Sleep(40);
