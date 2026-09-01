@@ -965,9 +965,14 @@ try {
     'open_app' {
       $name = Get-PayloadValue 'name'
       if (-not $name) { throw 'open_app requires name' }
+      # launch WITHOUT stealing the user's foreground window:
+      $prevFg = [DshWin32]::GetForegroundWindow()
       $proc = Start-Process $name -PassThru
-      Start-Sleep -Milliseconds 600
-      $result.message = "Started $name"
+      Start-Sleep -Milliseconds 800
+      if ($prevFg -ne [IntPtr]::Zero -and $prevFg -ne $proc.MainWindowHandle) {
+        try { [DshWin32]::ForceForeground($prevFg) } catch { }
+      }
+      $result.message = "Started $name (focus restored to your previous window; operated in background)"
       $result.pid = $proc.Id
     }
 
