@@ -289,8 +289,9 @@ function Get-Dispatch {
 }
 
 function Get-OverlayEnabled {
+  # overlay window is opt-in only (user asked NOT to show the small window).
   $o = Get-PayloadValue 'overlay'
-  if ($null -eq $o) { return $true }
+  if ($null -eq $o) { return $false }
   return [bool]$o
 }
 

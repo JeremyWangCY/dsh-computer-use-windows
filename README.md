@@ -23,7 +23,8 @@
 
 安全约束：元素索引只在产生它的那次 `get_app_state` 内有效；只操作用户明确指定的应用与窗口。
 
-## 后台合成光标模式 + 虚拟光标悬浮层
+## 后台合成光标模式
+
 
 `computer` 工具默认 **`dispatch: background`**：输入不抢真实鼠标/键盘，也不把目标窗口
 带回前台（codex-style，参照 cua-driver 的 Windows 后台路线）。
@@ -35,22 +36,21 @@
   Chromium 目标、不支持的拖拽），helper 返回 `background_unavailable: true` 并说明原因，
   可直接对单个动作改用 `"dispatch": "foreground"`（真实 SendInput，带回前台并回报
   `focus_ok`）。
-- **虚拟光标悬浮层**（`overlay: true`）：每次输入动作前，在目标点旁浮现一个 codex 式
-  透明、点击穿透、置顶的小药丸窗口，显示 AI 当前虚拟光标位置和动作标签，约 1s 后淡出；
-  右上角 `x` 可隐藏。若要完全关闭，传 `"overlay": false`。
+- 不干扰你正常使用：默认不弹出任何窗口、不抢真实键鼠。可选的虚拟光标悬浮层默认**关闭**，
+  仅当显式传 `"overlay": true` 时才在动作点旁短暂显示一个置顶小药丸。
 
 | 参数 | 默认 | 说明 |
 |------|------|------|
 | `dispatch` | `background` | `background` 后台合成光标输入；`foreground` 真实 SendInput |
-| `overlay` | `true` | 显示/隐藏虚拟光标悬浮层 |
+| `overlay` | `false` | 可选：显示/隐藏虚拟光标悬浮层（默认关闭） |
 
 ## 架构
 
 - 宿主进程内 ESM 插件（`lib/index.js`），直接 spawn **Windows PowerShell 5.1**
   （`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`）。
 - `lib/computer-use-helper.ps1` 一次性拷到 %TEMP% 后以 JSON 载荷调用（argv 传参、stdout 回 JSON）。
-- `lib/virtual-cursor-overlay.ps1` 由 helper 按需自启：TransparencyKey 分层、置顶、点击穿透
-  （WM_NCHITTEST 命中测试放行除 `x` 键区外的区域），每次动作后显示约 1s。
+- `lib/virtual-cursor-overlay.ps1` 可选：仅当 `overlay: true` 时由 helper 自启（TransparencyKey
+  分层、置顶、点击穿透），默认不启动。
 - 无额外原生二进制依赖，Windows 自带 PowerShell 即可工作。
 
 ## 安装

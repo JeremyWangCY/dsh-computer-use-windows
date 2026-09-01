@@ -143,9 +143,9 @@ $timer.Add_Tick({
 })
 
 $fade = New-Object System.Windows.Forms.Timer
-$fade.Interval = 80
+$fade.Interval = 300
 $fade.Add_Tick({
-  if ($form.Opacity -gt 0.05) { $form.Opacity -= 0.10 }
+  if ($form.Opacity -gt 0.05) { $form.Opacity -= 0.05 }
   else { $form.Opacity = 0.0; $script:shown = $false; $fade.Stop() }
 })
 
