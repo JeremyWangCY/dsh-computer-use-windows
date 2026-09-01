@@ -289,6 +289,14 @@ function Get-Dispatch {
   return ([string]$d).ToLowerInvariant()
 }
 
+function Get-OverlayEnabled {
+  # codex-style cursor indicator: ON by default (user asked to see where the AI will click).
+  # Pass overlay: false on an action to hide the indicator for that action.
+  $o = Get-PayloadValue 'overlay'
+  if ($null -eq $o) { return $true }
+  return [bool]$o
+}
+
 function Resolve-TargetWindow {
   param([string]$App, [int]$Index)
   $wins = @([DshWin32]::EnumWindowsList())
@@ -425,7 +433,38 @@ function Get-DocumentText {
   return ''
 }
 
-# ---------------------------------------------------------------- background dispatch
+# ---------------------------------------------------------------- overlay + background dispatch
+
+function Ensure-OverlayProcess {
+  # ponytail: pid-marker check; races only duplicate a harmless overlay instance
+  $dir = Join-Path $env:TEMP 'dsh-cua'
+  $pidFile = Join-Path $dir 'overlay.pid'
+  if (Test-Path $pidFile) {
+    $pidNow = Get-Content $pidFile -Raw -ErrorAction SilentlyContinue
+    $p = Get-Process -Id ([int]$pidNow) -ErrorAction SilentlyContinue
+    if ($p) { return }
+  }
+  $ov = Join-Path $PSScriptRoot 'virtual-cursor-overlay.ps1'
+  if (-not (Test-Path $ov)) { return }
+  Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',"`"$ov`"") -WindowStyle Hidden | Out-Null
+}
+
+function Write-CursorState {
+  param([int]$X, [int]$Y, [string]$Label, [bool]$Show)
+  if (-not $Show) { $Label = 'hidden' }
+  $dir = Join-Path $env:TEMP 'dsh-cua'
+  if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+  $ts = [DateTimeOffset]::Now.ToUnixTimeMilliseconds()
+  $state = @{ x = $X; y = $Y; label = $Label; ts = $ts; show = $Show } | ConvertTo-Json -Compress
+  Set-Content -Path (Join-Path $dir 'cursor.state') -Value $state -Encoding ascii
+}
+
+function Notify-Cursor {
+  param([int]$X, [int]$Y, [string]$Label)
+  $on = Get-OverlayEnabled
+  if ($on) { Ensure-OverlayProcess }
+  Write-CursorState -X $X -Y $Y -Label $Label -Show $on
+}
 
 function Find-TextInputHwnd {
   param([IntPtr]$Hwnd)
@@ -513,6 +552,13 @@ function Invoke-FromPoint {
     $el = $el.GetParent()
   }
   return @{ ok = $false }
+}
+
+function Get-OverlayPoint-WindowCenter {
+  param($Win)
+  $cx = [int](($Win.Rect.Left + $Win.Rect.Right) / 2)
+  $cy = [int](($Win.Rect.Top + $Win.Rect.Bottom) / 2)
+  return @($cx, $cy)
 }
 
 function Do-AppState {
@@ -627,6 +673,7 @@ try {
         $sx = $x; $sy = $y
       }
       if ($dispatch -eq 'background') {
+        Notify-Cursor -X $sx -Y $sy -Label 'click'
         $hit = Invoke-FromPoint -X $sx -Y $sy
         if ($hit.ok) {
           $result.method = 'uia_hit_' + $hit.method
@@ -657,6 +704,7 @@ try {
       $el = Find-ElementByIndex -Hwnd $win.Hwnd -Index $element
       $ip = $null
       if ($el.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$ip)) {
+        if ($dispatch -eq 'background') { Notify-Cursor -X (Safe-Int ($el.Current.BoundingRectangle.X + $el.Current.BoundingRectangle.Width / 2)) -Y (Safe-Int ($el.Current.BoundingRectangle.Y + $el.Current.BoundingRectangle.Height / 2)) -Label ('click element ' + $element) }
         $ip.Invoke()
         $result.method = 'invoke_pattern'
         $result.message = "Invoked element $element"
@@ -717,6 +765,7 @@ try {
       $el = Find-ElementByIndex -Hwnd $win.Hwnd -Index $element
       $vp = $null
       if ($el.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$vp)) {
+        if ($dispatch -eq 'background') { Notify-Cursor -X (Safe-Int ($el.Current.BoundingRectangle.X + $el.Current.BoundingRectangle.Width / 2)) -Y (Safe-Int ($el.Current.BoundingRectangle.Y + $el.Current.BoundingRectangle.Height / 2)) -Label 'set_value' }
         $vp.SetValue($value)
         $result.method = 'value_pattern'
         $result.message = "Set element $element value"
@@ -743,17 +792,20 @@ try {
           Start-Sleep -Milliseconds 150
           $result.focus_ok = ([DshWin32]::ForegroundHwnd() -eq $win.Hwnd.ToInt64())
         }
+        $pt = Get-OverlayPoint-WindowCenter $win
+        $cx = $pt[0]; $cy = $pt[1]
         if ($dispatch -eq 'background') {
           $h = Find-TextInputHwnd $win.Hwnd
           if ($h -eq [IntPtr]::Zero) {
             # fallback: apps with no native edit HWND (WinUI/Chromium) -> ValuePattern.SetValue
             $vel = Find-ValuePatternEl $win.Hwnd
             if ($null -ne $vel) {
+              Notify-Cursor -X $cx -Y $cy -Label ('set_value ' + $text.Length + ' chars')
               $vv = $null
               if ($vel.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$vv)) {
                 $vv.SetValue($text)
                 $result.method = 'value_pattern'
-                $result.message = "Set text via ValuePattern ($(($text.Length)) chars) ? WinUI/Chromium target with no edit HWND; replaces field content. Verify with get_app_state."
+                $result.message = "Set text via ValuePattern ($(($text.Length)) chars) — WinUI/Chromium target with no edit HWND; replaces field content. Verify with get_app_state."
                 break
               }
             }
@@ -761,6 +813,7 @@ try {
             $result.message = "type: no edit HWND or ValuePattern control for WM_CHAR in '$app'; use dispatch=foreground."
             break
           }
+          Notify-Cursor -X $cx -Y $cy -Label ("type " + $text.Length + ' chars')
           Send-BackgroundText -Hwnd $h -Text $text
           $result.method = 'wm_char'
           $result.target_hwnd = $h.ToInt64()
@@ -793,6 +846,8 @@ try {
           $result.message = "key: no focusable control HWND in '$app' to receive WM_KEY; use dispatch=foreground."
           break
         }
+        $pt = Get-OverlayPoint-WindowCenter $win
+        Notify-Cursor -X $pt[0] -Y $pt[1] -Label ('key ' + $key)
         Send-BackgroundKey -Hwnd $h -Key $key -Modifiers $mods
         $result.method = 'wm_key'
         $result.message = "Sent $key (wm_key) to hwnd $($h.ToInt64()); accelerator/menu handling is app-dependent"
@@ -822,6 +877,7 @@ try {
         $sx = $x; $sy = $y
       }
       if ($dispatch -eq 'background') {
+        Notify-Cursor -X $sx -Y $sy -Label ('scroll ' + $dir)
         $pt = New-Object System.Windows.Point($sx, $sy)
         $el = [System.Windows.Automation.AutomationElement]::FromPoint($pt)
         $done = $false
@@ -880,6 +936,7 @@ try {
         $fx += $r.Left; $fy += $r.Top; $tx += $r.Left; $ty += $r.Top
       }
       if ($dispatch -eq 'background') {
+        Notify-Cursor -X $fx -Y $fy -Label 'drag'
         $pt = New-Object System.Windows.Point($fx, $fy)
         $el = [System.Windows.Automation.AutomationElement]::FromPoint($pt)
         $tp = $null
@@ -932,4 +989,3 @@ catch {
 }
 
 [Console]::Out.Write(($result | ConvertTo-Json -Depth 10 -Compress))
-
