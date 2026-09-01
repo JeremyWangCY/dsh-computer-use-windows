@@ -1,85 +1,42 @@
-# dsh vc overlay — small click-through virtual MOUSE CURSOR for dsh-computer-use background mode.
-# Shows a small pointer arrow at the AI current action point. It MOVES to each new
-# point (never fades), is topmost, never activates, and all clicks pass through it.
-# Reads %TEMP%\dsh-cua\cursor.state {x,y,ts,show} written by computer-use-helper.ps1.
 param()
 $ErrorActionPreference = "SilentlyContinue"
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-
-# own pid so the one-shot helper can keep us alive
+# DPI-aware FIRST: window coords are then physical pixels, matching the physical UIA coords
+# the helper writes into cursor.state. Without this, DWM scales our position by the DPI factor.
+$dpiSig = @"
+using System; using System.Runtime.InteropServices;
+public static class DshDpi { [DllImport("user32.dll")] public static extern bool SetProcessDPIAware(); }
+"@
+Add-Type -TypeDefinition $dpiSig
+[void][DshDpi]::SetProcessDPIAware()
 $dir = Join-Path $env:TEMP "dsh-cua"
 if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
 Set-Content -Path (Join-Path $dir "overlay.pid") -Value $PID -Encoding ascii
-
-$asmWF  = [System.Windows.Forms.Form].Assembly.Location
-$asmDraw = [System.Drawing.Bitmap].Assembly.Location
-Add-Type -TypeDefinition @'
-using System;
-using System.Drawing;
-using System.Windows.Forms;
-public class DshVcCur : Form {
-  protected override bool ShowWithoutActivation { get { return true; } }
-  protected override CreateParams CreateParams {
-    get { CreateParams cp = base.CreateParams; cp.ExStyle |= 0x00000080; return cp; }
-  }
-  protected override void WndProc(ref Message m) {
-    if (m.Msg == 0x0084) { m.Result = (IntPtr)(-1); return; }  // HTTRANSPARENT: click-through
-    base.WndProc(ref m);
-  }
-}
-'@ -ReferencedAssemblies $asmWF, $asmDraw
-
-$form = New-Object DshVcCur
-$form.Size = New-Object System.Drawing.Size(22, 22)
-$form.BackColor = [System.Drawing.Color]::Magenta
-$form.TransparencyKey = [System.Drawing.Color]::Magenta
-$form.TopMost = $true
-$form.ShowInTaskbar = $false
-$form.FormBorderStyle = "None"
-$form.StartPosition = "Manual"
-$form.Opacity = 0.0
-
-# classic pointer arrow, tip at top-left (0,0), body extends down-right
-$form.Add_Paint({
-  param($s, $e)
-  $g = $e.Graphics
-  $g.SmoothingMode = "AntiAlias"
-  $pts = @(
-    (New-Object System.Drawing.PointF(1,1)),
-    (New-Object System.Drawing.PointF(1,16)),
-    (New-Object System.Drawing.PointF(5,12.5)),
-    (New-Object System.Drawing.PointF(7,19)),
-    (New-Object System.Drawing.PointF(9.5,18)),
-    (New-Object System.Drawing.PointF(7,11.5)),
-    (New-Object System.Drawing.PointF(12,11.5))
-  )
-  $fill = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::White)
-  $outline = New-Object System.Drawing.Pen ([System.Drawing.Color]::Black, 1.5)
-  $g.FillPolygon($fill, $pts)
-  $g.DrawPolygon($outline, $pts)
-})
-
+Add-Type -AssemblyName System.Drawing
+$b64 = "dXNpbmcgU3lzdGVtOyB1c2luZyBTeXN0ZW0uRHJhd2luZzsgdXNpbmcgU3lzdGVtLkRyYXdpbmcuRHJhd2luZzJEOyB1c2luZyBTeXN0ZW0uRHJhd2luZy5JbWFnaW5nOyB1c2luZyBTeXN0ZW0uUnVudGltZS5JbnRlcm9wU2VydmljZXM7CnB1YmxpYyBzdGF0aWMgY2xhc3MgRHNoVmNMYXllciB7CiAgW1N0cnVjdExheW91dChMYXlvdXRLaW5kLlNlcXVlbnRpYWwpXSBzdHJ1Y3QgUE9JTlQgeyBwdWJsaWMgaW50IHgseTsgcHVibGljIFBPSU5UKGludCBhLGludCBiKXt4PWE7eT1iO30gfQogIFtTdHJ1Y3RMYXlvdXQoTGF5b3V0S2luZC5TZXF1ZW50aWFsKV0gc3RydWN0IFNJWkUgeyBwdWJsaWMgaW50IGN4LGN5OyBwdWJsaWMgU0laRShpbnQgYSxpbnQgYil7Y3g9YTtjeT1iO30gfQogIFtTdHJ1Y3RMYXlvdXQoTGF5b3V0S2luZC5TZXF1ZW50aWFsKV0gc3RydWN0IEJMRU5ERlVOQ1RJT04geyBwdWJsaWMgYnl0ZSBCbGVuZE9wLEJsZW5kRmxhZ3MsU291cmNlQ29uc3RhbnRBbHBoYSxBbHBoYUZvcm1hdDsgfQogIFtTdHJ1Y3RMYXlvdXQoTGF5b3V0S2luZC5TZXF1ZW50aWFsKV0gc3RydWN0IEJJVE1BUElORk9IRUFERVIgeyBwdWJsaWMgdWludCBiaVNpemU7IHB1YmxpYyBpbnQgYmlXaWR0aCxiaUhlaWdodDsgcHVibGljIHVzaG9ydCBiaVBsYW5lcyxiaUJpdENvdW50OyBwdWJsaWMgdWludCBiaUNvbXByZXNzaW9uLGJpU2l6ZUltYWdlOyBwdWJsaWMgaW50IGJpWFBlbHNQZXJNZXRlcixiaVlQZWxzUGVyTWV0ZXI7IHB1YmxpYyB1aW50IGJpQ2xyVXNlZCxiaUNsckltcG9ydGFudDsgfQogIFtTdHJ1Y3RMYXlvdXQoTGF5b3V0S2luZC5TZXF1ZW50aWFsKV0gc3RydWN0IEJJVE1BUElORk8geyBwdWJsaWMgQklUTUFQSU5GT0hFQURFUiBibWlIZWFkZXI7IHB1YmxpYyB1aW50IGJtaUNvbG9yczsgfQogIFtEbGxJbXBvcnQoInVzZXIzMi5kbGwiLENoYXJTZXQ9Q2hhclNldC5Vbmljb2RlLFNldExhc3RFcnJvcj10cnVlKV0gc3RhdGljIGV4dGVybiBJbnRQdHIgQ3JlYXRlV2luZG93RXhXKHVpbnQgZXgsc3RyaW5nIGNscyxzdHJpbmcgbmFtZSx1aW50IHN0eWxlLGludCB4LGludCB5LGludCBjeCxpbnQgY3ksSW50UHRyIHAsSW50UHRyIG0sSW50UHRyIGluc3QsSW50UHRyIHEpOwogIFtEbGxJbXBvcnQoInVzZXIzMi5kbGwiKV0gc3RhdGljIGV4dGVybiBib29sIFVwZGF0ZUxheWVyZWRXaW5kb3coSW50UHRyIGh3bmQsSW50UHRyIGRjLHJlZiBQT0lOVCBkc3QscmVmIFNJWkUgc2l6ZSxJbnRQdHIgc3JjRGMscmVmIFBPSU5UIHNyYyx1aW50IGtleSxyZWYgQkxFTkRGVU5DVElPTiBibGVuZCx1aW50IGZsYWdzKTsKICBbRGxsSW1wb3J0KCJ1c2VyMzIuZGxsIildIHN0YXRpYyBleHRlcm4gYm9vbCBTaG93V2luZG93KEludFB0ciBoLGludCBjbWQpOwogIFtEbGxJbXBvcnQoInVzZXIzMi5kbGwiKV0gc3RhdGljIGV4dGVybiBJbnRQdHIgR2V0REMoSW50UHRyIGgpOwogIFtEbGxJbXBvcnQoInVzZXIzMi5kbGwiKV0gc3RhdGljIGV4dGVybiBpbnQgUmVsZWFzZURDKEludFB0ciBoLEludFB0ciBkYyk7CiAgW0RsbEltcG9ydCgiZ2RpMzIuZGxsIildIHN0YXRpYyBleHRlcm4gSW50UHRyIENyZWF0ZUNvbXBhdGlibGVEQyhJbnRQdHIgZGMpOwogIFtEbGxJbXBvcnQoImdkaTMyLmRsbCIpXSBzdGF0aWMgZXh0ZXJuIGJvb2wgRGVsZXRlREMoSW50UHRyIGRjKTsKICBbRGxsSW1wb3J0KCJnZGkzMi5kbGwiKV0gc3RhdGljIGV4dGVybiBJbnRQdHIgU2VsZWN0T2JqZWN0KEludFB0ciBkYyxJbnRQdHIgb2JqKTsKICBbRGxsSW1wb3J0KCJnZGkzMi5kbGwiKV0gc3RhdGljIGV4dGVybiBJbnRQdHIgQ3JlYXRlRElCU2VjdGlvbihJbnRQdHIgaGRjLHJlZiBCSVRNQVBJTkZPIHBibWksdWludCB1c2FnZSxvdXQgSW50UHRyIHBwdkJpdHMsSW50UHRyIGhTZWN0aW9uLHVpbnQgb2Zmc2V0KTsKICBbRGxsSW1wb3J0KCJnZGkzMi5kbGwiKV0gc3RhdGljIGV4dGVybiBib29sIERlbGV0ZU9iamVjdChJbnRQdHIgb2JqKTsKICBbRGxsSW1wb3J0KCJrZXJuZWwzMi5kbGwiLENoYXJTZXQ9Q2hhclNldC5Vbmljb2RlKV0gc3RhdGljIGV4dGVybiBJbnRQdHIgR2V0TW9kdWxlSGFuZGxlVyhzdHJpbmcgbSk7CiAgc3RhdGljIEludFB0ciBod25kPUludFB0ci5aZXJvOwogIHN0YXRpYyB2b2lkIENyZWF0ZSgpewogICAgaWYoaHduZCE9SW50UHRyLlplcm8pIHJldHVybjsKICAgIHVpbnQgZXggPSAweDAwMDgwMDAwdSB8IDB4MDAwMDAwMjB1IHwgMHgwMDAwMDA4MHUgfCAweDAwMDAwMDA4dSB8IDB4MDgwMDAwMDB1OwogICAgdWludCBzdCA9IDB4ODAwMDAwMDB1OwogICAgaHduZCA9IENyZWF0ZVdpbmRvd0V4VyhleCwic3RhdGljIiwiIixzdCwwLDAsNDgsNDgsSW50UHRyLlplcm8sSW50UHRyLlplcm8sR2V0TW9kdWxlSGFuZGxlVyhudWxsKSxJbnRQdHIuWmVybyk7CiAgICBpZihod25kIT1JbnRQdHIuWmVybykgU2hvd1dpbmRvdyhod25kLDQpOwogIH0KICBzdGF0aWMgdm9pZCBCbGl0KGludCB4LGludCB5LGJvb2wgc2hvdyl7CiAgICBDcmVhdGUoKTsgaWYoaHduZD09SW50UHRyLlplcm8pIHJldHVybjsKICAgIGludCB3PTQ4LGg9NDg7CiAgICBJbnRQdHIgc2Q9R2V0REMoSW50UHRyLlplcm8pOwogICAgQklUTUFQSU5GTyBibWk9bmV3IEJJVE1BUElORk8oKTsgYm1pLmJtaUhlYWRlci5iaVNpemU9KHVpbnQpTWFyc2hhbC5TaXplT2YodHlwZW9mKEJJVE1BUElORk9IRUFERVIpKTsgYm1pLmJtaUhlYWRlci5iaVdpZHRoPXc7IGJtaS5ibWlIZWFkZXIuYmlIZWlnaHQ9LWg7IGJtaS5ibWlIZWFkZXIuYmlQbGFuZXM9MTsgYm1pLmJtaUhlYWRlci5iaUJpdENvdW50PTMyOyBibWkuYm1pSGVhZGVyLmJpQ29tcHJlc3Npb249MDsKICAgIEludFB0ciBiaXRzOyBJbnRQdHIgaGJtPUNyZWF0ZURJQlNlY3Rpb24oc2QscmVmIGJtaSwwLG91dCBiaXRzLEludFB0ci5aZXJvLDApOwogICAgaWYoaGJtPT1JbnRQdHIuWmVybykgcmV0dXJuOwogICAgQml0bWFwIGJtcD1uZXcgQml0bWFwKHcsaCx3KjQsUGl4ZWxGb3JtYXQuRm9ybWF0MzJicHBBcmdiLGJpdHMpOwogICAgdXNpbmcoR3JhcGhpY3MgZz1HcmFwaGljcy5Gcm9tSW1hZ2UoYm1wKSl7CiAgICAgIGcuU21vb3RoaW5nTW9kZT1TbW9vdGhpbmdNb2RlLkFudGlBbGlhczsgZy5DbGVhcihDb2xvci5UcmFuc3BhcmVudCk7CiAgICAgIGlmKHNob3cpewogICAgICAgIHVzaW5nKEdyYXBoaWNzUGF0aCBncD1uZXcgR3JhcGhpY3NQYXRoKCkpeyBncC5BZGRFbGxpcHNlKDAsMCw0OCw0OCk7CiAgICAgICAgICB1c2luZyhQYXRoR3JhZGllbnRCcnVzaCBwZz1uZXcgUGF0aEdyYWRpZW50QnJ1c2goZ3ApKXsgcGcuQ2VudGVyUG9pbnQ9bmV3IFBvaW50RigyNCwyNCk7IHBnLkNlbnRlckNvbG9yPUNvbG9yLkZyb21BcmdiKDEzMCw4MCwxNTAsMjQ1KTsgQ29sb3JbXSBzYz1uZXcgQ29sb3JbZ3AuUG9pbnRDb3VudF07IGZvcihpbnQgaT0wO2k8c2MuTGVuZ3RoO2krKykgc2NbaV09Q29sb3IuRnJvbUFyZ2IoMCw4MCwxNTAsMjQ1KTsgcGcuU3Vycm91bmRDb2xvcnM9c2M7IGcuRmlsbEVsbGlwc2UocGcsMCwwLDQ4LDQ4KTsgfSB9CiAgICAgICAgUG9pbnRGW10gcHRzPW5ldyBQb2ludEZbXXsgbmV3IFBvaW50RigyNCwyNCksIG5ldyBQb2ludEYoMjUsMzkpLCBuZXcgUG9pbnRGKDI4LjVmLDM1LjVmKSwgbmV3IFBvaW50RigzMSw0MiksIG5ldyBQb2ludEYoMzQsNDEpLCBuZXcgUG9pbnRGKDMxLDM0LjVmKSwgbmV3IFBvaW50RigzNiwzNC41ZikgfTsKICAgICAgICB1c2luZyhTb2xpZEJydXNoIGI9bmV3IFNvbGlkQnJ1c2goQ29sb3IuV2hpdGUpKSBnLkZpbGxQb2x5Z29uKGIscHRzKTsKICAgICAgICB1c2luZyhQZW4gcD1uZXcgUGVuKENvbG9yLkJsYWNrLDEuNmYpKXsgcC5MaW5lSm9pbj1MaW5lSm9pbi5Sb3VuZDsgcC5TdGFydENhcD1MaW5lQ2FwLlJvdW5kOyBwLkVuZENhcD1MaW5lQ2FwLlJvdW5kOyBnLkRyYXdQb2x5Z29uKHAscHRzKTsgfQogICAgICB9CiAgICB9CiAgICBJbnRQdHIgbWQ9Q3JlYXRlQ29tcGF0aWJsZURDKHNkKTsgSW50UHRyIG9sZD1TZWxlY3RPYmplY3QobWQsaGJtKTsKICAgIFBPSU5UIGRzdD1uZXcgUE9JTlQoeC0yNCx5LTI0KTsgU0laRSBzej1uZXcgU0laRSh3LGgpOyBQT0lOVCBzcmM9bmV3IFBPSU5UKDAsMCk7CiAgICBCTEVOREZVTkNUSU9OIGJmPW5ldyBCTEVOREZVTkNUSU9OKCk7IGJmLkJsZW5kT3A9MDsgYmYuQmxlbmRGbGFncz0wOyBiZi5Tb3VyY2VDb25zdGFudEFscGhhPTI1NTsgYmYuQWxwaGFGb3JtYXQ9MTsKICAgIFVwZGF0ZUxheWVyZWRXaW5kb3coaHduZCxzZCxyZWYgZHN0LHJlZiBzeixtZCxyZWYgc3JjLDAscmVmIGJmLDIpOwogICAgU2VsZWN0T2JqZWN0KG1kLG9sZCk7IERlbGV0ZU9iamVjdChoYm0pOyBEZWxldGVEQyhtZCk7IFJlbGVhc2VEQyhJbnRQdHIuWmVybyxzZCk7CiAgfQogIHB1YmxpYyBzdGF0aWMgdm9pZCBTaG93KGludCB4LGludCB5KXsgQmxpdCh4LHksdHJ1ZSk7IH0KICBwdWJsaWMgc3RhdGljIHZvaWQgSGlkZSgpeyBCbGl0KDAsMCxmYWxzZSk7IH0KfQ=="
+$csFile = Join-Path $dir "dsh-vc-layer.cs"
+[System.IO.File]::WriteAllText($csFile, [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b64)))
+Add-Type -Path $csFile -ReferencedAssemblies ([System.Drawing.Bitmap].Assembly.Location)
 $stateFile = Join-Path $dir "cursor.state"
-$script:lastTs = 0.0
-
-$timer = New-Object System.Windows.Forms.Timer
-$timer.Interval = 120
-$timer.Add_Tick({
-  if (-not (Test-Path $stateFile)) { return }
-  try {
-    $st = Get-Content -Path $stateFile -Raw -ErrorAction Stop | ConvertFrom-Json
-    if ($null -ne $st -and $st.ts -and ([double]$st.ts -ne $script:lastTs)) {
-      $script:lastTs = [double]$st.ts
-      if ($st.show) {
-        $form.Location = New-Object System.Drawing.Point([int][Math]::Round([double]$st.x), [int][Math]::Round([double]$st.y))
-        $form.Opacity = 1.0
-      } else {
-        $form.Opacity = 0.0
+$lastTs = 0.0
+$lastSeen = [DateTime]::MinValue
+$visible = $false
+# The indicator follows each action and auto-hides 3s after the last one, so it
+# closes when the assistant turn ends instead of lingering on screen.
+while ($true) {
+  if (Test-Path $stateFile) {
+    try {
+      $st = Get-Content -Path $stateFile -Raw -ErrorAction Stop | ConvertFrom-Json
+      if ($null -ne $st -and $st.ts -and ([double]$st.ts -ne $lastTs)) {
+        $lastTs = [double]$st.ts
+        $lastSeen = [DateTime]::Now
+        if ($st.show) { [DshVcLayer]::Show([int][double]$st.x, [int][double]$st.y); $visible = $true }
+        else { [DshVcLayer]::Hide(); $visible = $false }
       }
-    }
-  } catch { }
-})
-
-$form.Add_Shown({ $timer.Start() })
-[System.Windows.Forms.Application]::Run($form)
+    } catch { }
+  }
+  if ($visible -and (([DateTime]::Now - $lastSeen).TotalMilliseconds -gt 3000)) {
+    [DshVcLayer]::Hide()
+    $visible = $false
+  }
+  Start-Sleep -Milliseconds 100
+}
