@@ -36,21 +36,17 @@
   Chromium 目标、不支持的拖拽），helper 返回 `background_unavailable: true` 并说明原因，
   可直接对单个动作改用 `"dispatch": "foreground"`（真实 SendInput，带回前台并回报
   `focus_ok`）。
-- 不干扰你正常使用：默认不弹出任何窗口、不抢真实键鼠。可选的虚拟光标悬浮层默认**关闭**，
-  仅当显式传 `"overlay": true` 时才在动作点旁短暂显示一个置顶小药丸。
+- 不干扰你正常使用：不弹出任何窗口、不抢真实键鼠。
 
 | 参数 | 默认 | 说明 |
 |------|------|------|
 | `dispatch` | `background` | `background` 后台合成光标输入；`foreground` 真实 SendInput |
-| `overlay` | `false` | 可选：显示/隐藏虚拟光标悬浮层（默认关闭） |
 
 ## 架构
 
 - 宿主进程内 ESM 插件（`lib/index.js`），直接 spawn **Windows PowerShell 5.1**
   （`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`）。
 - `lib/computer-use-helper.ps1` 一次性拷到 %TEMP% 后以 JSON 载荷调用（argv 传参、stdout 回 JSON）。
-- `lib/virtual-cursor-overlay.ps1` 可选：仅当 `overlay: true` 时由 helper 自启（TransparencyKey
-  分层、置顶、点击穿透），默认不启动。
 - 无额外原生二进制依赖，Windows 自带 PowerShell 即可工作。
 
 ## 安装
