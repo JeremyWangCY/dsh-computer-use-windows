@@ -349,6 +349,14 @@ function Get-WindowInfo {
   }
 }
 
+function Safe-Int {
+  param($v)
+  if ($null -eq $v) { return 0 }
+  $d = [double]$v
+  if ([double]::IsNaN($d) -or [double]::IsInfinity($d)) { return 0 }
+  return [int]$d
+}
+
 function Get-AccessibilityTree {
   param([IntPtr]$Hwnd, [int]$MaxElements = $script:MAX_ELEMENTS)
   $aeRoot = [System.Windows.Automation.AutomationElement]::FromHandle($Hwnd)
@@ -380,7 +388,7 @@ function Get-AccessibilityTree {
       enabled = $cur.IsEnabled
       offscreen = $cur.IsOffscreen
       invokable = $invoke
-      rect = @{ x = [int]$rect.X; y = [int]$rect.Y; width = [int]$rect.Width; height = [int]$rect.Height }
+      rect = @{ x = (Safe-Int $rect.X); y = (Safe-Int $rect.Y); width = (Safe-Int $rect.Width); height = (Safe-Int $rect.Height) }
     }
     $out.Add($item)
   }
@@ -694,7 +702,7 @@ try {
       $el = Find-ElementByIndex -Hwnd $win.Hwnd -Index $element
       $ip = $null
       if ($el.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$ip)) {
-        if ($dispatch -eq 'background') { Notify-Cursor -X ([int]($el.Current.BoundingRectangle.X + $el.Current.BoundingRectangle.Width / 2)) -Y ([int]($el.Current.BoundingRectangle.Y + $el.Current.BoundingRectangle.Height / 2)) -Label ('click element ' + $element) }
+        if ($dispatch -eq 'background') { Notify-Cursor -X (Safe-Int ($el.Current.BoundingRectangle.X + $el.Current.BoundingRectangle.Width / 2)) -Y (Safe-Int ($el.Current.BoundingRectangle.Y + $el.Current.BoundingRectangle.Height / 2)) -Label ('click element ' + $element) }
         $ip.Invoke()
         $result.method = 'invoke_pattern'
         $result.message = "Invoked element $element"
@@ -713,7 +721,7 @@ try {
             } elseif ($dispatch -eq 'background') {
               $r = $el.Current.BoundingRectangle
               $result.background_unavailable = $true
-              $result.element_rect = @{ x = [int]$r.X; y = [int]$r.Y; width = [int]$r.Width; height = [int]$r.Height }
+              $result.element_rect = @{ x = (Safe-Int $r.X); y = (Safe-Int $r.Y); width = (Safe-Int $r.Width); height = (Safe-Int $r.Height) }
               $result.message = "Element $element has no UIA action pattern (Invoke/Toggle/Selection/ExpandCollapse); background click unavailable. Use dispatch=foreground."
             } else {
               $pt = New-Object System.Windows.Point
@@ -726,7 +734,7 @@ try {
               } else {
                 $r2 = $el.Current.BoundingRectangle
                 if ($r2.Width -gt 0 -and $r2.Height -gt 0) {
-                  $cx = [int]($r2.X + $r2.Width / 2); $cy = [int]($r2.Y + $r2.Height / 2)
+                  $cx = (Safe-Int ($r2.X + $r2.Width / 2)); $cy = (Safe-Int ($r2.Y + $r2.Height / 2))
                   [DshWin32]::MouseClick($cx, $cy)
                   $result.method = 'rect_center'
                   $result.message = "Clicked element $element center at ($cx, $cy)"
@@ -755,7 +763,7 @@ try {
       $el = Find-ElementByIndex -Hwnd $win.Hwnd -Index $element
       $vp = $null
       if ($el.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$vp)) {
-        if ($dispatch -eq 'background') { Notify-Cursor -X ([int]($el.Current.BoundingRectangle.X + $el.Current.BoundingRectangle.Width / 2)) -Y ([int]($el.Current.BoundingRectangle.Y + $el.Current.BoundingRectangle.Height / 2)) -Label 'set_value' }
+        if ($dispatch -eq 'background') { Notify-Cursor -X (Safe-Int ($el.Current.BoundingRectangle.X + $el.Current.BoundingRectangle.Width / 2)) -Y (Safe-Int ($el.Current.BoundingRectangle.Y + $el.Current.BoundingRectangle.Height / 2)) -Label 'set_value' }
         $vp.SetValue($value)
         $result.method = 'value_pattern'
         $result.message = "Set element $element value"
