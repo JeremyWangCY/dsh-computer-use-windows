@@ -1,4 +1,4 @@
-# dsh-computer-use-windows
+# dsh-pc-pilot
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
@@ -21,19 +21,19 @@ While acting, the model moves a small **codex-style on-screen cursor** (a rounde
 ## Requirements
 
 - Windows 10 or 11
-- DeepSeek Harness (DSH) with the `dsh-computer-use-windows` bundle loaded in the `web` profile
+- DeepSeek Harness (DSH) with the `dsh-pc-pilot` bundle loaded in the `web` profile
 - PowerShell 5.1 (built into Windows) and Node.js ≥ 22.12 (shipped with DSH)
 
 ## Installation
 
 ### From the DSH plugin market
 
-Once listed, search for *dsh-computer-use-windows* in the market and click install.
+Once listed, search for *dsh-pc-pilot* in the market and click install.
 
 ### From a GitHub release
 
 ```powershell
-pnpm add https://github.com/JeremyWangCY/dsh-computer-use-windows/releases/download/v0.1.0-beta.1/dsh-computer-use-windows-0.1.0-beta.1.tgz
+pnpm add https://github.com/JeremyWangCY/PC-Pilot/releases/download/v0.1.0-beta.1/dsh-pc-pilot-0.1.0-beta.1.tgz
 ```
 
 Run this inside the DSH profile (`~/.dsh/profiles/web`), then restart the host.
@@ -41,12 +41,12 @@ Run this inside the DSH profile (`~/.dsh/profiles/web`), then restart the host.
 ### From source
 
 ```powershell
-git clone https://github.com/JeremyWangCY/dsh-computer-use-windows.git
-cd dsh-computer-use-windows
-pnpm add ./dsh-computer-use-windows
+git clone https://github.com/JeremyWangCY/PC-Pilot.git
+cd dsh-pc-pilot
+pnpm add ./dsh-pc-pilot
 ```
 
-Or link it manually: add `"dsh-computer-use-windows": "link:./vendor/dsh-computer-use-windows"` to the profile's `package.json` dependencies, add the bundle to `dsh.profile.bundles`, run `pnpm install`, and restart the host.
+Or link it manually: add `"dsh-pc-pilot": "link:./vendor/dsh-pc-pilot"` to the profile's `package.json` dependencies, add the bundle to `dsh.profile.bundles`, run `pnpm install`, and restart the host.
 
 ## Usage
 
@@ -97,8 +97,8 @@ The helper is a single self-contained `computer-use-helper.ps1` copied to `%TEMP
 ## Development
 
 ```powershell
-git clone https://github.com/JeremyWangCY/dsh-computer-use-windows.git
-cd dsh-computer-use-windows
+git clone https://github.com/JeremyWangCY/PC-Pilot.git
+cd dsh-pc-pilot
 pwsh -File scripts/smoke-test.ps1
 ```
 

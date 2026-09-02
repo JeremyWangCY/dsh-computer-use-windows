@@ -1,4 +1,4 @@
-# dsh-computer-use-windows
+# dsh-pc-pilot
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
@@ -21,19 +21,19 @@
 ## 环境要求
 
 - Windows 10 或 11
-- DeepSeek Harness（DSH），`web` profile 中加载 `dsh-computer-use-windows` bundle
+- DeepSeek Harness（DSH），`web` profile 中加载 `dsh-pc-pilot` bundle
 - PowerShell 5.1（系统内置）与 Node.js ≥ 22.12（DSH 自带）
 
 ## 安装
 
 ### 从 DSH 插件市场
 
-收录后，在市场中搜索 *dsh-computer-use-windows* 一键安装。
+收录后，在市场中搜索 *dsh-pc-pilot* 一键安装。
 
 ### 从 GitHub Release
 
 ```powershell
-pnpm add https://github.com/JeremyWangCY/dsh-computer-use-windows/releases/download/v0.1.0-beta.1/dsh-computer-use-windows-0.1.0-beta.1.tgz
+pnpm add https://github.com/JeremyWangCY/PC-Pilot/releases/download/v0.1.0-beta.1/dsh-pc-pilot-0.1.0-beta.1.tgz
 ```
 
 在 DSH profile 目录（`~/.dsh/profiles/web`）内执行，然后重启宿主。
@@ -41,12 +41,12 @@ pnpm add https://github.com/JeremyWangCY/dsh-computer-use-windows/releases/downl
 ### 从源码
 
 ```powershell
-git clone https://github.com/JeremyWangCY/dsh-computer-use-windows.git
-cd dsh-computer-use-windows
-pnpm add ./dsh-computer-use-windows
+git clone https://github.com/JeremyWangCY/PC-Pilot.git
+cd dsh-pc-pilot
+pnpm add ./dsh-pc-pilot
 ```
 
-或手动 link：在 profile 的 `package.json` 依赖中加入 `"dsh-computer-use-windows": "link:./vendor/dsh-computer-use-windows"`，把 bundle 加进 `dsh.profile.bundles`，`pnpm install` 后重启宿主。
+或手动 link：在 profile 的 `package.json` 依赖中加入 `"dsh-pc-pilot": "link:./vendor/dsh-pc-pilot"`，把 bundle 加进 `dsh.profile.bundles`，`pnpm install` 后重启宿主。
 
 ## 使用
 
@@ -97,8 +97,8 @@ helper 是单个自包含的 `computer-use-helper.ps1`，宿主启动时复制�
 ## 开发
 
 ```powershell
-git clone https://github.com/JeremyWangCY/dsh-computer-use-windows.git
-cd dsh-computer-use-windows
+git clone https://github.com/JeremyWangCY/PC-Pilot.git
+cd dsh-pc-pilot
 pwsh -File scripts/smoke-test.ps1
 ```
 
