@@ -85,45 +85,45 @@ function polyDist(x,y){
 // render at 2x supersample, straight-alpha per-layer "over", returns 96x96 ImageData-like {data,w,h}
 function renderCursor(){
   const w = W*SS, h = W*SS;
-  const acc = new Float64Array(W*W*4);
+  // phase 1: render supersampled, premultiplied
+  const hi = new Float64Array(w*h*4);
   for (let yy=0; yy<h; yy++){
     for (let xx=0; xx<w; xx++){
       const x=(xx+0.5)/SS, y=(yy+0.5)/SS;
       const dx=x-GX, dy=y-GY, r2=dx*dx+dy*dy;
       const g1 = P.A1*Math.exp(-r2/(P.S1*P.S1));
       const g2 = P.A2*Math.exp(-r2/(P.S2*P.S2));
-      let aG = 1-(1-g1)*(1-g2), rC=10, gC=132, bC=255;       // glow (straight alpha layer)
+      const aG = 1-(1-g1)*(1-g2);                    // glow layer
+      let pr = 10*aG, pg = 132*aG, pb = 255*aG, pa = aG;
       const sIn = inPoly(x-1.5, y-2.8);
       const sd = sIn ? 0 : polyDist(x-1.5, y-2.8);
-      const aSh = P.shA*Math.exp(-(sd*sd)/(P.shS*P.shS));     // shadow (black)
+      const aSh = P.shA*Math.exp(-(sd*sd)/(P.shS*P.shS)); // shadow (black), premul = 0
+      pa = aSh + pa*(1-aSh);
       const inside = inPoly(x,y);
       const dOut = inside ? 0 : polyDist(x,y);
       const aW = (!inside && dOut>0) ? P.white*Math.exp(-(dOut*dOut)/0.81) : 0;
-      const aK = inside ? P.body : 0;
-      // straight-alpha over chain
-      let oa = aG;
-      let orr = rC*aG/255*255, og = gC*aG/255*255, ob = bC*aG/255*255; // color constant; keep as is
-      // over shadow
-      let a = aSh;
-      orr = (0*a + orr*(1-a)); og = (0*a + og*(1-a)); ob = (0*a + ob*(1-a)); oa = a + oa*(1-a);
-      // over white
-      a = aW;
-      orr = (255*a + orr*(1-a)); og = (255*a + og*(1-a)); ob = (255*a + ob*(1-a)); oa = a + oa*(1-a);
-      // over body
-      a = aK;
-      orr = orr*(1-a); og = og*(1-a); ob = ob*(1-a); oa = a + oa*(1-a);
-      // accumulate premultiplied for downsample
+      pr = 255*aW + pr*(1-aW); pg = 255*aW + pg*(1-aW); pb = 255*aW + pb*(1-aW); pa = aW + pa*(1-aW);
+      const aK = inside ? P.body : 0;                // black body, premul = 0
+      pr *= (1-aK); pg *= (1-aK); pb *= (1-aK); pa = aK + pa*(1-aK);
       const o=(yy*w+xx)*4;
-      acc[o] += orr*oa/SS/SS; acc[o+1] += og*oa/SS/SS; acc[o+2] += ob*oa/SS/SS; acc[o+3] += oa/SS/SS;
+      hi[o]=pr; hi[o+1]=pg; hi[o+2]=pb; hi[o+3]=pa;
     }
   }
+  // phase 2: 2x2 box downsample (premultiplied averages), then un-premultiply to straight alpha
   const out = new Uint8ClampedArray(W*W*4);
-  for (let i=0;i<W*W;i++){
-    const a = acc[i*4+3];
-    out[i*4+3] = Math.round(a*255);
-    out[i*4]   = Math.round(a>0 ? acc[i*4]/a : 0);
-    out[i*4+1] = Math.round(a>0 ? acc[i*4+1]/a : 0);
-    out[i*4+2] = Math.round(a>0 ? acc[i*4+2]/a : 0);
+  for (let yy=0; yy<W; yy++){
+    for (let xx=0; xx<W; xx++){
+      let sr=0, sg=0, sb=0, sa=0;
+      for (let sy=0; sy<SS; sy++) for (let sx=0; sx<SS; sx++){
+        const o=((yy*SS+sy)*w + (xx*SS+sx))*4;
+        sr+=hi[o]; sg+=hi[o+1]; sb+=hi[o+2]; sa+=hi[o+3];
+      }
+      const n=SS*SS, pa=sa/n, d=(yy*W+xx)*4;
+      out[d+3] = Math.round(pa*255);
+      out[d]   = Math.round(pa>0 ? sr/pa : 0);
+      out[d+1] = Math.round(pa>0 ? sg/pa : 0);
+      out[d+2] = Math.round(pa>0 ? sb/pa : 0);
+    }
   }
   return out;
 }
