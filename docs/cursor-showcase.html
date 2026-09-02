@@ -195,8 +195,8 @@ demo.addEventListener("mousemove", e => {
   const r = demo.getBoundingClientRect();
   mouse.x = (e.clientX - r.left) * (demo.width / r.width);
   mouse.y = (e.clientY - r.top) * (demo.height / r.height);
-  paintDemo(mouse);
 });
+(function tick(){ paintDemo(mouse); requestAnimationFrame(tick); })();
 document.getElementById("bgBtns").addEventListener("click", e => {
   if (!e.target.dataset.bg) return;
   currentBg = e.target.dataset.bg;
