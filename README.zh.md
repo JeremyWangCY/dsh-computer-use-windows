@@ -1,5 +1,7 @@
 # dsh-pc-pilot
 
+[English](./README.md) | 中文
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
 ![Node](https://img.shields.io/badge/node-%E2%89%A522.12-green)
