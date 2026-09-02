@@ -532,6 +532,12 @@ function Send-BackgroundKey {
   for ($i = $modVks.Count - 1; $i -ge 0; $i--) { $null = [DshWin32]::SendMessage($Hwnd, 0x0101, [IntPtr]$modVks[$i], [IntPtr]::Zero) }
 }
 
+function Get-UiaParent {
+  param([System.Windows.Automation.AutomationElement]$el)
+  if ($null -eq $el) { return $null }
+  return [System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($el)
+}
+
 function Invoke-FromPoint {
   param([double]$X, [double]$Y)
   $pt = New-Object System.Windows.Point($X, $Y)
@@ -549,7 +555,7 @@ function Invoke-FromPoint {
     if ($el.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$sp)) {
       $sp.Select(); return @{ ok = $true; method = 'selection'; name = $el.Current.Name; rect = $el.Current.BoundingRectangle }
     }
-    $el = $el.GetParent()
+    $el = Get-UiaParent $el
   }
   return @{ ok = $false }
 }
@@ -894,7 +900,7 @@ try {
             for ($n = 0; $n -lt $amount; $n++) { if ($down) { $scp.Scroll($none, $amt) } else { $scp.Scroll($none, [System.Windows.Automation.ScrollAmount]::SmallDecrement) } }
             $result.method = 'scroll_pattern'; $done = $true; break
           }
-          $el = $el.GetParent()
+          $el = Get-UiaParent $el
         }
         if (-not $done) {
           $ptStruct = New-Object DshWin32+POINT
@@ -952,7 +958,7 @@ try {
             $moved = $true
             break
           }
-          $el = $el.GetParent()
+          $el = Get-UiaParent $el
         }
         if (-not $moved) {
           $result.background_unavailable = $true
