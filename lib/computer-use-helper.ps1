@@ -14,7 +14,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-$script:MAX_ELEMENTS = 500
+$script:MAX_ELEMENTS = 2000
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -885,9 +885,25 @@ try {
       if ($dispatch -eq 'background') {
         Notify-Cursor -X $sx -Y $sy -Label ('scroll ' + $dir)
         $pt = New-Object System.Windows.Point($sx, $sy)
-        $el = [System.Windows.Automation.AutomationElement]::FromPoint($pt)
         $done = $false
-        for ($i = 0; $i -lt 8 -and $null -ne $el; $i++) {
+        # Primary: hit the TARGET window's own document via FromHandle - immune to window occlusion
+        if ($win) {
+          $winEl = $null
+          try { $winEl = [System.Windows.Automation.AutomationElement]::FromHandle($win.Hwnd) } catch { $winEl = $null }
+          if ($winEl) {
+            $docCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::Document)
+            $doc = $winEl.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $docCond)
+            $dscp = $null
+            if ($doc -and $doc.TryGetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern, [ref]$dscp)) {
+              $none = [System.Windows.Automation.ScrollAmount]::NoAmount
+              for ($n = 0; $n -lt $amount; $n++) { if ($down) { $dscp.Scroll($none, [System.Windows.Automation.ScrollAmount]::LargeIncrement) } else { $dscp.Scroll($none, [System.Windows.Automation.ScrollAmount]::LargeDecrement) } }
+              $result.method = 'scroll_pattern'; $done = $true
+              $result.message = "Scrolled $dir x$amount via ScrollPattern on target window document"
+            }
+          }
+        }
+        $el = [System.Windows.Automation.AutomationElement]::FromPoint($pt)
+        for ($i = 0; $i -lt 16 -and $null -ne $el; $i++) {
           $rvp = $null
           if ($el.TryGetCurrentPattern([System.Windows.Automation.RangeValuePattern]::Pattern, [ref]$rvp)) {
             for ($n = 0; $n -lt $amount; $n++) { if ($down) { $rvp.SmallIncrement() } else { $rvp.SmallDecrement() } }
@@ -896,16 +912,20 @@ try {
           $scp = $null
           if ($el.TryGetCurrentPattern([System.Windows.Automation.ScrollPattern]::Pattern, [ref]$scp)) {
             $none = [System.Windows.Automation.ScrollAmount]::NoAmount
-            $amt = [System.Windows.Automation.ScrollAmount]::SmallIncrement
-            for ($n = 0; $n -lt $amount; $n++) { if ($down) { $scp.Scroll($none, $amt) } else { $scp.Scroll($none, [System.Windows.Automation.ScrollAmount]::SmallDecrement) } }
+            for ($n = 0; $n -lt $amount; $n++) { if ($down) { $scp.Scroll($none, [System.Windows.Automation.ScrollAmount]::LargeIncrement) } else { $scp.Scroll($none, [System.Windows.Automation.ScrollAmount]::LargeDecrement) } }
             $result.method = 'scroll_pattern'; $done = $true; break
           }
           $el = Get-UiaParent $el
         }
         if (-not $done) {
-          $ptStruct = New-Object DshWin32+POINT
-          $ptStruct.X = $sx; $ptStruct.Y = $sy
-          $h = [DshWin32]::WindowFromPoint($ptStruct)
+          $h = [IntPtr]::Zero
+          $wEl = [System.Windows.Automation.AutomationElement]::FromPoint($pt)
+          for ($i = 0; $i -lt 24 -and $null -ne $wEl; $i++) {
+            $nh = $wEl.Current.NativeWindowHandle
+            if ($nh -ne 0) { $h = [IntPtr]$nh; break }
+            $wEl = Get-UiaParent $wEl
+          }
+          if ($h -eq [IntPtr]::Zero -and $win) { $h = $win.Hwnd }
           if ($h -ne [IntPtr]::Zero) {
             $delta = $amount * 120
             if ($down) { $delta = -$delta }
