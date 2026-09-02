@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>PC-Pilot 光标光效验收</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #141417; color: #e8e8ec; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; padding: 32px 40px; }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .sub { color: #9a9aa5; font-size: 13px; margin-bottom: 28px; }
+  h2 { font-size: 15px; font-weight: 600; color: #cfcfd8; margin: 30px 0 12px; padding-top: 18px; border-top: 1px solid #2a2a30; }
+  .row { display: flex; gap: 20px; flex-wrap: wrap; }
+  .demo-wrap { position: relative; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,.4); }
+  #demo { display: block; cursor: none; }
+  .bg-btns { display: flex; gap: 8px; margin-bottom: 10px; }
+  .bg-btns button, .zoom-btns button { background: #26262c; color: #cfcfd8; border: 1px solid #34343c; border-radius: 6px; padding: 5px 14px; font-size: 12px; cursor: pointer; }
+  .bg-btns button.on, .zoom-btns button.on { background: #0a84ff; border-color: #0a84ff; color: #fff; }
+  .zoom-btns { display: flex; gap: 8px; align-items: center; }
+  .zoom-label { font-size: 12px; color: #9a9aa5; }
+  .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 26px; max-width: 720px; }
+  .sl label { font-size: 12px; color: #9a9aa5; display: flex; justify-content: space-between; margin-bottom: 3px; }
+  .sl input[type=range] { width: 100%; accent-color: #0a84ff; }
+  .cmp { display: flex; gap: 16px; }
+  .cmp .cell { flex: 0 0 auto; text-align: center; }
+  .cmp canvas { border-radius: 10px; box-shadow: 0 4px 18px rgba(0,0,0,.35); }
+  .cmp .cap { font-size: 12px; color: #9a9aa5; margin-top: 8px; }
+  .badge { display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px; background:#0a84ff22; color:#6db2ff; margin-left:8px; vertical-align: middle; }
+  .note { font-size: 12px; color: #7d7d88; margin-top: 8px; max-width: 720px; line-height: 1.7; }
+</style>
+</head>
+<body>
+<h1>PC-Pilot 虚拟光标光效验收<span class="badge">与 overlay C# 同一算法</span></h1>
+<div class="sub">下方演示区由 JavaScript 逐像素复现 lib/virtual-cursor-overlay.ps1 内嵌 C# 的合成管线：双层高斯光晕（systemBlue #0A84FF）→ 黑色投影 → 白描边 → 黑箭头本体，2× 超采样。所见即真实渲染。</div>
+
+<h2>交互演示 —— 在演示区移动鼠标，光标即虚拟指示器</h2>
+<div class="bg-btns" id="bgBtns">
+  <button data-bg="bili" class="on">B站浅色</button>
+  <button data-bg="dark">深色</button>
+  <button data-bg="paper">纸白文档</button>
+  <button data-bg="photo">照片</button>
+</div>
+<div class="demo-wrap"><canvas id="demo" width="860" height="460"></canvas></div>
+<div class="note">真实指示器为 96×96 逐像素透明分层窗口：点击穿透、不激活、置顶，最后一个动作 3 秒后自动隐藏。</div>
+
+<h2>新旧对比 —— 同一背景同一位置</h2>
+<div class="cmp" id="cmp"></div>
+
+<h2>参数微调 —— 拖动滑杆实时重渲</h2>
+<div class="sliders">
+  <div class="sl"><label>内层峰值 A1 <span id="vA1">0.50</span></label><input type="range" id="sA1" min="0.1" max="0.9" step="0.01" value="0.50"></div>
+  <div class="sl"><label>内层半径 σ1 <span id="vS1">10.0</span></label><input type="range" id="sS1" min="5" max="18" step="0.5" value="10"></div>
+  <div class="sl"><label>外层峰值 A2 <span id="vA2">0.26</span></label><input type="range" id="sA2" min="0.05" max="0.5" step="0.01" value="0.26"></div>
+  <div class="sl"><label>外层半径 σ2 <span id="vS2">20.0</span></label><input type="range" id="sS2" min="10" max="30" step="0.5" value="20"></div>
+  <div class="sl"><label>投影强度 <span id="vSh">0.34</span></label><input type="range" id="sSh" min="0" max="0.7" step="0.01" value="0.34"></div>
+  <div class="sl"><label>白描边强度 <span id="vW">1.00</span></label><input type="range" id="sW" min="0" max="1" step="0.05" value="1"></div>
+</div>
+
+<script>
+const W = 96, SS = 2, TipX = 32, TipY = 28, Scale = 1.3;
+const PX = [0,0,4.2,6.9,9.9,7.2,12.6], PY = [0,16.2,12.4,18.7,17.4,11.2,10.7];
+let GX = 42, GY = 44;
+const P = { A1:0.50, S1:10, A2:0.26, S2:20, shA:0.34, shS:3.2, white:1.0, body:0.93 };
+
+function segDist(x,y,ax,ay,bx,by){
+  const vx=bx-ax, vy=by-ay, wx=x-ax, wy=y-ay, len2=vx*vx+vy*vy;
+  let t = len2>0 ? (wx*vx+wy*vy)/len2 : 0; t = t<0?0:(t>1?1:t);
+  const dx=wx-t*vx, dy=wy-t*vy; return Math.sqrt(dx*dx+dy*dy);
+}
+function inPoly(x,y){
+  let ins=false; const n=PX.length; let j=n-1;
+  for (let i=0;i<n;i++){
+    const xi=TipX+PX[i]*Scale, yi=TipY+PY[i]*Scale, xj=TipX+PX[j]*Scale, yj=TipY+PY[j]*Scale;
+    if (((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) ins=!ins;
+    j=i;
+  } return ins;
+}
+function polyDist(x,y){
+  let best=1e9; const n=PX.length; let j=n-1;
+  for (let i=0;i<n;i++){
+    const d=segDist(x,y,TipX+PX[j]*Scale,TipY+PY[j]*Scale,TipX+PX[i]*Scale,TipY+PY[i]*Scale);
+    if (d<best) best=d; j=i;
+  } return best;
+}
+// render at 2x supersample, straight-alpha per-layer "over", returns 96x96 ImageData-like {data,w,h}
+function renderCursor(){
+  const w = W*SS, h = W*SS;
+  const acc = new Float64Array(W*W*4);
+  for (let yy=0; yy<h; yy++){
+    for (let xx=0; xx<w; xx++){
+      const x=(xx+0.5)/SS, y=(yy+0.5)/SS;
+      const dx=x-GX, dy=y-GY, r2=dx*dx+dy*dy;
+      const g1 = P.A1*Math.exp(-r2/(P.S1*P.S1));
+      const g2 = P.A2*Math.exp(-r2/(P.S2*P.S2));
+      let aG = 1-(1-g1)*(1-g2), rC=10, gC=132, bC=255;       // glow (straight alpha layer)
+      const sIn = inPoly(x-1.5, y-2.8);
+      const sd = sIn ? 0 : polyDist(x-1.5, y-2.8);
+      const aSh = P.shA*Math.exp(-(sd*sd)/(P.shS*P.shS));     // shadow (black)
+      const inside = inPoly(x,y);
+      const dOut = inside ? 0 : polyDist(x,y);
+      const aW = (!inside && dOut>0) ? P.white*Math.exp(-(dOut*dOut)/0.81) : 0;
+      const aK = inside ? P.body : 0;
+      // straight-alpha over chain
+      let oa = aG;
+      let orr = rC*aG/255*255, og = gC*aG/255*255, ob = bC*aG/255*255; // color constant; keep as is
+      // over shadow
+      let a = aSh;
+      orr = (0*a + orr*(1-a)); og = (0*a + og*(1-a)); ob = (0*a + ob*(1-a)); oa = a + oa*(1-a);
+      // over white
+      a = aW;
+      orr = (255*a + orr*(1-a)); og = (255*a + og*(1-a)); ob = (255*a + ob*(1-a)); oa = a + oa*(1-a);
+      // over body
+      a = aK;
+      orr = orr*(1-a); og = og*(1-a); ob = ob*(1-a); oa = a + oa*(1-a);
+      // accumulate premultiplied for downsample
+      const o=(yy*w+xx)*4;
+      acc[o] += orr*oa/SS/SS; acc[o+1] += og*oa/SS/SS; acc[o+2] += ob*oa/SS/SS; acc[o+3] += oa/SS/SS;
+    }
+  }
+  const out = new Uint8ClampedArray(W*W*4);
+  for (let i=0;i<W*W;i++){
+    const a = acc[i*4+3];
+    out[i*4+3] = Math.round(a*255);
+    out[i*4]   = Math.round(a>0 ? acc[i*4]/a : 0);
+    out[i*4+1] = Math.round(a>0 ? acc[i*4+1]/a : 0);
+    out[i*4+2] = Math.round(a>0 ? acc[i*4+2]/a : 0);
+  }
+  return out;
+}
+const cache = new Map();
+function cursorCanvas(){
+  const key = [P.A1,P.S1,P.A2,P.S2,P.shA,P.white].join("|");
+  if (cache.has(key)) return cache.get(key);
+  const data = renderCursor();
+  const cv = document.createElement("canvas"); cv.width=W; cv.height=W;
+  const ctx = cv.getContext("2d");
+  const img = new ImageData(data, W, W);
+  ctx.putImageData(img, 0, 0);
+  cache.set(key, cv);
+  if (cache.size > 40) cache.delete(cache.keys().next().value);
+  return cv;
+}
+function drawOld(ctx, cx, cy, zoom){
+  // old: PathGradientBrush linear disc a=0.51 -> 0 at r=24 + white arrow black outline
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 24*zoom);
+  g.addColorStop(0, "rgba(80,150,245,0.51)"); g.addColorStop(1, "rgba(80,150,245,0)");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 24*zoom, 0, 7); ctx.fill();
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(zoom*1.3, zoom*1.3);
+  ctx.beginPath();
+  ctx.moveTo(24-24+ -0.5, -0.5);
+  const pts = [[0,0],[0,16.2],[4.2,12.4],[6.9,18.7],[9.9,17.4],[7.2,11.2],[12.6,10.7]];
+  ctx.moveTo(pts[0][0]-3.5, pts[0][1]-3.5);
+  for (const p of pts) ctx.lineTo(p[0]-3.5, p[1]-3.5);
+  ctx.closePath();
+  ctx.fillStyle = "#fff"; ctx.strokeStyle = "#000"; ctx.lineWidth = 1.6/1.3;
+  ctx.lineJoin = "round"; ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+function paintDemo(mouse){
+  const cv = document.getElementById("demo");
+  const ctx = cv.getContext("2d");
+  const bg = currentBg;
+  // background
+  if (bg === "bili"){
+    ctx.fillStyle = "#f4f0f0"; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.fillStyle = "#fff"; for (let i=0;i<3;i++) ctx.fillRect(40, 40+i*140, 480, 110), ctx.fillRect(560, 40+i*140, 260, 110);
+    ctx.fillStyle = "#e8dede"; for (let i=0;i<3;i++){ ctx.fillRect(60, 60+i*140, 220, 14); ctx.fillRect(60, 86+i*140, 160, 10); }
+    ctx.fillStyle = "#87a3d4"; for (let i=0;i<3;i++) ctx.fillRect(600, 60+i*140, 40, 40);
+  } else if (bg === "dark"){
+    ctx.fillStyle = "#1c1c22"; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.fillStyle = "#26262e"; for (let i=0;i<3;i++) ctx.fillRect(40, 40+i*140, 780, 110);
+    ctx.fillStyle = "#3a3a46"; for (let i=0;i<3;i++){ ctx.fillRect(60, 60+i*140, 260, 14); ctx.fillRect(60, 86+i*140, 180, 10); }
+  } else if (bg === "paper"){
+    ctx.fillStyle = "#fbf9f4"; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.fillStyle = "#d9d2c4"; for (let i=0;i<14;i++) ctx.fillRect(60, 40+i*30, i%3?720:560, 8);
+    ctx.fillStyle = "#c4b89f"; ctx.fillRect(60, 40+14*30, 300, 8);
+  } else {
+    const g = ctx.createLinearGradient(0,0,cv.width,cv.height);
+    g.addColorStop(0,"#2a3a5c"); g.addColorStop(.5,"#7a5a4c"); g.addColorStop(1,"#1c2b3a");
+    ctx.fillStyle = g; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.fillStyle = "rgba(255,255,255,.12)";
+    for (let i=0;i<5;i++){ ctx.beginPath(); ctx.arc(120+i*150, 90+((i%2)*120), 34, 0, 7); ctx.fill(); }
+  }
+  const cv2 = cursorCanvas();
+  const zoom = currentZoom;
+  const size = W*zoom;
+  // draw cursor: tip at mouse point
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(cv2, mouse.x - TipX*zoom, mouse.y - TipY*zoom, size, size);
+}
+let currentBg = "bili", currentZoom = 3;
+const mouse = { x: 430, y: 230 };
+const demo = document.getElementById("demo");
+demo.addEventListener("mousemove", e => {
+  const r = demo.getBoundingClientRect();
+  mouse.x = (e.clientX - r.left) * (demo.width / r.width);
+  mouse.y = (e.clientY - r.top) * (demo.height / r.height);
+  paintDemo(mouse);
+});
+document.getElementById("bgBtns").addEventListener("click", e => {
+  if (!e.target.dataset.bg) return;
+  currentBg = e.target.dataset.bg;
+  document.querySelectorAll("#bgBtns button").forEach(b => b.classList.toggle("on", b === e.target));
+  paintDemo(mouse);
+});
+function paintCmp(){
+  const wrap = document.getElementById("cmp");
+  wrap.innerHTML = "";
+  [["新 · 高斯双层光","new"],["旧 · PathGradientBrush","old"]].forEach(([cap, kind]) => {
+    const cell = document.createElement("div"); cell.className = "cell";
+    const cv = document.createElement("canvas"); cv.width = 150; cv.height = 150;
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#f4f0f0"; ctx.fillRect(0,0,150,150);
+    ctx.fillStyle = "#e2dada"; ctx.fillRect(20,110,110,10);
+    const zoom = 3, cx = 62, cy = 62;
+    if (kind === "new"){
+      const cv2 = cursorCanvas();
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(cv2, cx - TipX*zoom, cy - TipY*zoom, W*zoom, W*zoom);
+    } else drawOld(ctx, cx, cy, zoom);
+    const cap2 = document.createElement("div"); cap2.className = "cap"; cap2.textContent = cap;
+    cell.appendChild(cv); cell.appendChild(cap2); wrap.appendChild(cell);
+  });
+}
+function bindSlider(id, key, labelId, fmt, isInt){
+  const el = document.getElementById(id);
+  const lab = document.getElementById(labelId);
+  el.addEventListener("input", () => {
+    P[key] = isInt ? parseInt(el.value) : parseFloat(el.value);
+    lab.textContent = fmt ? fmt(P[key]) : P[key];
+    paintDemo(mouse); paintCmp();
+  });
+}
+bindSlider("sA1","A1","vA1"); bindSlider("sS1","S1","vS1",null,true);
+bindSlider("sA2","A2","vA2"); bindSlider("sS2","S2","vS2",null,true);
+bindSlider("sSh","shA","vSh"); bindSlider("sW","white","vW");
+paintDemo(mouse); paintCmp();
+</script>
+</body>
+</html>
