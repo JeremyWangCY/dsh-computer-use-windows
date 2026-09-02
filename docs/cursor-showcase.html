@@ -49,18 +49,18 @@
 <h2>参数微调 —— 拖动滑杆实时重渲</h2>
 <div class="sliders">
   <div class="sl"><label>内层峰值 A1 <span id="vA1">0.50</span></label><input type="range" id="sA1" min="0.1" max="0.9" step="0.01" value="0.50"></div>
-  <div class="sl"><label>内层半径 σ1 <span id="vS1">10.0</span></label><input type="range" id="sS1" min="5" max="18" step="0.5" value="10"></div>
+  <div class="sl"><label>内层半径 σ1 <span id="vS1">10.0</span></label><input type="range" id="sS1" min="3" max="18" step="0.5" value="10"></div>
   <div class="sl"><label>外层峰值 A2 <span id="vA2">0.26</span></label><input type="range" id="sA2" min="0.05" max="0.5" step="0.01" value="0.26"></div>
-  <div class="sl"><label>外层半径 σ2 <span id="vS2">20.0</span></label><input type="range" id="sS2" min="10" max="30" step="0.5" value="20"></div>
+  <div class="sl"><label>外层半径 σ2 <span id="vS2">20.0</span></label><input type="range" id="sS2" min="6" max="30" step="0.5" value="20"></div>
   <div class="sl"><label>投影强度 <span id="vSh">0.34</span></label><input type="range" id="sSh" min="0" max="0.7" step="0.01" value="0.34"></div>
   <div class="sl"><label>白描边强度 <span id="vW">1.00</span></label><input type="range" id="sW" min="0" max="1" step="0.05" value="1"></div>
 </div>
 
 <script>
-const W = 96, SS = 2, TipX = 32, TipY = 28, Scale = 1.3;
+const W = 96, SS = 2, TipX = 32, TipY = 28, Scale = 0.95;
 const PX = [0,0,4.2,6.9,9.9,7.2,12.6], PY = [0,16.2,12.4,18.7,17.4,11.2,10.7];
 let GX = 42, GY = 44;
-const P = { A1:0.50, S1:10, A2:0.26, S2:20, shA:0.34, shS:3.2, white:1.0, body:0.93 };
+const P = { A1:0.50, S1:10, A2:0.26, S2:20, shA:0.34, shS:3.2, white:1.0, body:0.93, round:1.2 };
 
 function segDist(x,y,ax,ay,bx,by){
   const vx=bx-ax, vy=by-ay, wx=x-ax, wy=y-ay, len2=vx*vx+vy*vy;
@@ -96,14 +96,19 @@ function renderCursor(){
       const aG = 1-(1-g1)*(1-g2);                    // glow layer
       let pr = 10*aG, pg = 132*aG, pb = 255*aG, pa = aG;
       const sIn = inPoly(x-1.5, y-2.8);
-      const sd = sIn ? 0 : polyDist(x-1.5, y-2.8);
-      const aSh = P.shA*Math.exp(-(sd*sd)/(P.shS*P.shS)); // shadow (black), premul = 0
-      pa = aSh + pa*(1-aSh);
+      const sdE = polyDist(x-1.5, y-2.8);
+      const sdS = (sIn ? -sdE : sdE) - P.round;
+      const sd = sdS < 0 ? 0 : sdS;
+      const aSh = P.shA*Math.exp(-(sd*sd)/(P.shS*P.shS)); // shadow (black)
+      pr *= (1-aSh); pg *= (1-aSh); pb *= (1-aSh); pa = aSh + pa*(1-aSh);
       const inside = inPoly(x,y);
-      const dOut = inside ? 0 : polyDist(x,y);
-      const aW = (!inside && dOut>0) ? P.white*Math.exp(-(dOut*dOut)/0.81) : 0;
+      const dE = polyDist(x,y);
+      const sdR = (inside ? -dE : dE) - P.round;
+      const inR = sdR < 0;
+      const dOut = inR ? 0 : sdR;
+      const aW = (!inR && dOut>0) ? P.white*Math.exp(-(dOut*dOut)/0.81) : 0;
       pr = 255*aW + pr*(1-aW); pg = 255*aW + pg*(1-aW); pb = 255*aW + pb*(1-aW); pa = aW + pa*(1-aW);
-      const aK = inside ? P.body : 0;                // black body, premul = 0
+      const aK = inR ? P.body : 0;                // black body, premul = 0
       pr *= (1-aK); pg *= (1-aK); pb *= (1-aK); pa = aK + pa*(1-aK);
       const o=(yy*w+xx)*4;
       hi[o]=pr; hi[o+1]=pg; hi[o+2]=pb; hi[o+3]=pa;
