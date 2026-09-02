@@ -57,10 +57,10 @@
 </div>
 
 <script>
-const W = 96, SS = 2, TipX = 32, TipY = 28, Scale = 0.95;
-const PX = [0.76,0.32,0.09,0,0,0.22,0.75,1.76,3.24,3.86,4.3,4.71,6.36,6.83,7.37,8.16,8.64,9.3,9.51,9.35,7.72,7.58,7.81,8.49,10.71,11.62,11.76,11.15], PY = [0.65,0.4,0.5,1,13.82,15,15.23,14.6,13.27,12.91,13.01,13.59,17.44,18.1,18.31,18.15,17.95,17.48,16.93,16.14,12.39,11.69,11.3,11.08,10.88,10.62,10.2,9.47];
+const W = 96, SS = 2, TipX = 32, TipY = 28, Scale = 1.0;
+const PX = [1.68,0.82,0.42,0.15,0,0,0.21,0.58,1.13,2.31,2.57,3.48,4.01,4.48,5.07,6.19,6.7,7.14,7.64,8.55,8.25,9.03,9.31,9.4,9.18,8.08,7.83,7.97,8.35,9.39,9.63,10.94,11.29,11.22,10.33], PY = [1.42,0.9,0.91,1.21,2.2,13.08,14.49,14.9,14.9,14.11,13.88,13.31,13.27,13.52,14.42,17.05,17.83,18.11,18.2,17.99,18.11,17.6,17.17,16.66,15.75,13.22,12.17,11.65,11.28,11,10.98,10.66,10.29,9.78,8.77];
 let GX = 42, GY = 44;
-const P = { A1:0.50, S1:10, A2:0.26, S2:20, shA:0.34, shS:3.2, white:1.0, body:0.93, round:0 };
+const P = { A1:0.50, S1:10, A2:0.26, S2:20, shA:0.34, shS:3.2, white:1.0, body:0.97, round:0 };
 
 function segDist(x,y,ax,ay,bx,by){
   const vx=bx-ax, vy=by-ay, wx=x-ax, wy=y-ay, len2=vx*vx+vy*vy;
@@ -106,10 +106,10 @@ function renderCursor(){
       const sdR = (inside ? -dE : dE) - P.round;
       const inR = sdR < 0;
       const dOut = inR ? 0 : sdR;
-      const aW = (!inR && dOut>0) ? P.white*Math.exp(-(dOut*dOut)/0.81) : 0;
-      pr = 255*aW + pr*(1-aW); pg = 255*aW + pg*(1-aW); pb = 255*aW + pb*(1-aW); pa = aW + pa*(1-aW);
-      const aK = inR ? P.body : 0;                // black body, premul = 0
-      pr *= (1-aK); pg *= (1-aK); pb *= (1-aK); pa = aK + pa*(1-aK);
+      const aW = (!inR && dOut>0) ? P.white*Math.exp(-(dOut*dOut)/1.21) : 0;
+      pr = 10*aW + pr*(1-aW); pg = 132*aW + pg*(1-aW); pb = 255*aW + pb*(1-aW); pa = aW + pa*(1-aW);
+      const aK = inR ? P.body : 0;                // white body
+      pr = 255*aK + pr*(1-aK); pg = 255*aK + pg*(1-aK); pb = 255*aK + pb*(1-aK); pa = aK + pa*(1-aK);
       const o=(yy*w+xx)*4;
       hi[o]=pr; hi[o+1]=pg; hi[o+2]=pb; hi[o+3]=pa;
     }
