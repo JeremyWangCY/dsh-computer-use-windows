@@ -1,72 +1,109 @@
-# dsh-computer-use (Windows)
+# dsh-computer-use-windows
 
-适用于 **Windows** 的 DeepSeek Harness Computer Use 宿主插件：
-通过 **UIA 无障碍树 + PrintWindow 截图 + SendInput** 真实键鼠操作本地桌面
-（镜像 zcode/codex computer use 的工具形态）。
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
+![Node](https://img.shields.io/badge/node-%E2%89%A522.12-green)
 
-## 功能
+A **[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) host plugin** that gives the model a single `computer` tool to observe and operate the local Windows desktop: an indexed UIA accessibility tree, per-window screenshots, background synthetic-cursor input that never steals focus, and — when a task truly requires it — real SendInput mouse/keyboard control.
 
-注册全局模型工具 `computer`，动作一览：
+While acting, the model moves a small **codex-style on-screen cursor** (a rounded arrow with a soft blue radial glow) to each target point, so a human can follow exactly what the AI is about to click or type. The cursor is click-through, never takes focus, and auto-hides three seconds after the last action.
 
-| 动作 | 说明 |
-|------|------|
-| `list_apps` | 列出运行中的应用（pid / 名称 / 窗口标题 / 句柄 / 位置）|
-| `get_app_state` | 聚焦窗口，构建带索引的 UIA 无障碍树，可选保存窗口 PNG 截图 |
-| `click_element` | 按 UIA 元素索引点击 |
-| `click` | 按窗口内坐标点击 |
-| `set_value` | 设置元素文本值 |
-| `type` | Unicode 文本输入 |
-| `key` | 按键（Enter / Tab / 方向键 / F1-F24 等，可带 ctrl/shift/alt/win）|
-| `scroll` | 窗口内滚轮 |
-| `drag` | 窗口内拖拽 |
-| `open_app` | 启动应用 |
+## Features
 
-安全约束：元素索引只在产生它的那次 `get_app_state` 内有效；只操作用户明确指定的应用与窗口。
+- **One tool, full desktop** — `list_apps`, `get_app_state`, `click_element`, `click`, `set_value`, `type`, `key`, `scroll`, `drag`, `open_app`.
+- **Background-first input** — actions run via UIA action patterns (Invoke / Toggle / Selection / ExpandCollapse / RangeValue / Transform), then pixel hit-testing, then `WM_CHAR` / `WM_KEY` / `WM_MOUSEWHEEL` messages. The target window is not brought forward and the user's real mouse/keyboard are never hijacked.
+- **Per-task dispatch** — `dispatch: "foreground"` (real SendInput) exists for the cases that genuinely need it (canvas clicks, unsupported drags, apps with no background path); the tool guidance keeps background as the default and asks the model to be explicit when it goes foreground.
+- **Virtual-cursor indicator** — per-pixel-alpha layered window (`UpdateLayeredWindow` + `CreateDIBSection`): rounded white arrow with black outline over a soft blue radial glow. Click-through (`WS_EX_TRANSPARENT`), non-activating (`WS_EX_NOACTIVATE` + `SW_SHOWNOACTIVATE`), always-on-top. Auto-hides 3 s after the last action and reappears on the next one.
+- **High-DPI accurate** — the overlay calls `SetProcessDPIAware` at startup and positions itself in physical pixels, matching the physical coordinates the helper reports from UIA. Correct placement at 100% / 125% / 150% scaling.
+- **Window screenshots** — `PrintWindow`-based per-window capture saved as PNG, returned with `get_app_state { screenshot: true }`.
+- **Zero setup** — no daemons, no drivers, no admin rights. Everything runs through the Windows PowerShell 5.1 helper that ships inside the package.
 
-## 后台合成光标模式
+## Requirements
 
+- Windows 10 or 11
+- DeepSeek Harness (DSH) with the `dsh-computer-use-windows` bundle loaded in the `web` profile
+- PowerShell 5.1 (built into Windows) and Node.js ≥ 22.12 (shipped with DSH)
 
-`computer` 工具默认 **`dispatch: background`**：输入不抢真实鼠标/键盘，也不把目标窗口
-带回前台（codex-style，参照 cua-driver 的 Windows 后台路线）。
+## Installation
 
-- **后台输入**：优先用 UIA 动作模式（Invoke / Toggle / Selection / ExpandCollapse /
-  RangeValue / Transform），再到像素点命中测试，最后用 `WM_CHAR` / `WM_KEY` /
-  `WM_MOUSEWHEEL` 消息投递给目标控件句柄。
-- **诚实降级**：某点/某控件在后台没有可行路径时（画布点击、无原生 HWND 的 WinUI /
-  Chromium 目标、不支持的拖拽），helper 返回 `background_unavailable: true` 并说明原因，
-  可直接对单个动作改用 `"dispatch": "foreground"`（真实 SendInput，带回前台并回报
-  `focus_ok`）。
-- **不干扰你正常使用**：不抢真实键鼠、不把目标窗口带回前台。默认会在 AI 即将点击/输入的位置显示一个**小号点击穿透的 codex 风格光标**（圆润白色箭头 + 柔和蓝色径向光晕；默认开，你在意就在动作上传 `overlay: false` 隐藏）。它绝不取焦点、点击可穿透，跟随每个动作点移动，并在**最后一个动作 3 秒后自动隐藏**——也就是 AI 本轮输出结束时光标随之消失，下一个动作再出现。已适配高 DPI（坐标为物理像素，125% 缩放下也精确落点）。
+### From the DSH plugin market
 
-| 参数 | 默认 | 说明 |
-|------|------|------|
-| `dispatch` | `background` | `background` 后台合成光标输入；`foreground` 真实 SendInput——按任务判断：仅在用户明确要求真实键鼠、或任务必需的动作没有后台路径时使用，并明确告知 |
-| `overlay` | `true` | 真实键鼠不动的前提下，在动作点显示圆润箭头+柔和蓝光（`overlay: false` 隐藏）；最后一个动作 3 秒后自动消失 |
+Once listed, search for *dsh-computer-use-windows* in the market and click install.
 
-## 架构
-
-- 宿主进程内 ESM 插件（`lib/index.js`），直接 spawn **Windows PowerShell 5.1**
-  （`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`）。
-- `lib/computer-use-helper.ps1` 一次性拷到 %TEMP% 后以 JSON 载荷调用（argv 传参、stdout 回 JSON）。
-- 无额外原生二进制依赖，Windows 自带 PowerShell 即可工作。
-
-## 安装
-
-```bash
-# 方式一：市场安装（需要已发布到 GitHub/npm 后）
-dsh plugin --profile web add dsh-computer-use-windows
-
-# 方式二：本地链接（本仓库）
-cd C:\Users\Laptop\dsh-computer-use-windows
-dsh plugin --profile web add "link:./"
-```
-
-## 自测
+### From a GitHub release
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-test.ps1
+pnpm add https://github.com/JeremyWangCY/dsh-computer-use-windows/releases/download/v0.1.0-beta.1/dsh-computer-use-windows-0.1.0-beta.1.tgz
 ```
 
-## 许可证
+Run this inside the DSH profile (`~/.dsh/profiles/web`), then restart the host.
 
-MIT
+### From source
+
+```powershell
+git clone https://github.com/JeremyWangCY/dsh-computer-use-windows.git
+cd dsh-computer-use-windows
+pnpm add ./dsh-computer-use-windows
+```
+
+Or link it manually: add `"dsh-computer-use-windows": "link:./vendor/dsh-computer-use-windows"` to the profile's `package.json` dependencies, add the bundle to `dsh.profile.bundles`, run `pnpm install`, and restart the host.
+
+## Usage
+
+The plugin registers one global tool, `computer`. Typical flow:
+
+1. `computer { action: "list_apps" }` — running apps with pids, window titles, hwnds and rects.
+2. `computer { action: "get_app_state", app: "Notepad", screenshot: true }` — indexed accessibility tree (element index / role / name / value / automation_id / rect / invokable) plus a window screenshot.
+3. Act on the state — `click_element { app, element }`, `set_value { app, element, value }`, `type { app, text }`, `key { app, key, modifiers }`, `scroll { app, x, y, amount, direction }`, `drag { app, from_x, from_y, to_x, to_y }`.
+4. Refresh the state after every UI change; element indexes are only valid for the `get_app_state` that produced them.
+
+### Key parameters
+
+| Parameter | Default | Notes |
+| --- | --- | --- |
+| `dispatch` | `background` | UIA patterns + window messages; never steals focus. `foreground` uses real SendInput — pick it per task only when the user asked for real control or the essential action has no background path. |
+| `overlay` | `true` | Show the click-through cursor at each action point; it auto-hides 3 s after the last action. |
+| `screenshot` | `true` | Capture a per-window PNG in `get_app_state`. |
+| `app` | — | pid number, process name, or window-title substring; `window_index` disambiguates multiple windows. |
+| `x` / `y` | — | Window-local pixels (with `app`) or screen coordinates (without). |
+
+## How it works
+
+```
+model ── computer tool ──> host (Node ESM bundle)
+                              │  spawns PowerShell 5.1 helper per action (JSON in / JSON out)
+                              ├─> UIA accessibility tree (IUIAutomation)
+                              ├─> PrintWindow / CopyFromScreen screenshots
+                              ├─> background input: UIA patterns → pixel hit-test → WM_* messages
+                              ├─> foreground input: SendInput
+                              └─> overlay: UpdateLayeredWindow per-pixel-alpha layered window
+```
+
+The helper is a single self-contained `computer-use-helper.ps1` copied to `%TEMP%` once per host start; the overlay is `virtual-cursor-overlay.ps1`, a resident low-frequency loop that reads a state file and blits a 48×48 DIB with `UpdateLayeredWindow`. Registration uses the harness tool API (`defineTool` + `ctx.tools.register`) with `isConcurrencySafe: false`, so desktop actions serialize.
+
+## Security considerations
+
+- The tool can read window titles, accessibility trees and screenshots, and can drive input into the user's applications. The bundled tool description instructs the model to operate **only** what the user explicitly asked for and to never submit forms, send messages, make purchases, delete data, or change account/settings without explicit instruction.
+- Background actions never move the user's cursor or steal focus. Foreground actions do — the guidance requires the model to say so.
+- No network access, no telemetry, no persistence beyond `%TEMP%\dsh-cua-*` state files.
+
+## Troubleshooting
+
+- **The cursor indicator does not appear** — check `%TEMP%\dsh-cua-diag.log` (boot diagnostics) and make sure the host was restarted after installation.
+- **The indicator is visible but misplaced** — ensure the installed version calls `SetProcessDPIAware` (all ≥ 0.1.0 builds do); mismatched DPI awareness shifts the overlay by the scaling factor.
+- **Desktop icons vanish / gray boxes appear** — this is a Windows shell (WorkerW) glitch typically caused by desktop-organizer or wallpaper tools, not by this plugin; restarting `explorer.exe` restores the desktop.
+- **`background_unavailable`** — the target has no background path (canvas, some WinUI/Chromium surfaces). Decide per task whether to go `foreground`.
+
+## Development
+
+```powershell
+git clone https://github.com/JeremyWangCY/dsh-computer-use-windows.git
+cd dsh-computer-use-windows
+pwsh -File scripts/smoke-test.ps1
+```
+
+The smoke test exercises helper actions (`list_apps`, `get_app_state`, background clicks) against a real window. To run the plugin from a local checkout, link it into a DSH profile as shown above.
+
+## License
+
+[MIT](LICENSE)

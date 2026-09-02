@@ -1,9 +1,10 @@
-# awesome-dsh-plugin 收录条目草稿（data/plugins/JeremyWangCY__dsh-computer-use-windows.yml）
-# 注意：收录要求仓库为公开、创建满 1 天、>=10 个 commit、package.json 声明 dsh.bundle（已满足）。
-# 当前仓库为私有（自用），转为公开并达标后再提交以下内容。
+# awesome-dsh-plugin catalog entry (data/plugins/JeremyWangCY__dsh-computer-use-windows.yml)
+# Listing requirements met: public repo, age > 1 day, >= 10 commits, package.json declares dsh.bundle.
 url: https://github.com/JeremyWangCY/dsh-computer-use-windows
-name: JeremyWangCY/dsh-computer-use-windows
+name: dsh-computer-use-windows
+owner: JeremyWangCY
 category: tools
 description:
-  en: Windows computer-use for DeepSeek Harness: UIA accessibility tree, PrintWindow screenshots and real SendInput mouse/keyboard (list_apps, get_app_state, click, type, key, scroll, drag).
-  zh: 适用于 Windows 的 DeepSeek Harness 电脑操作插件：UIA 无障碍树 + PrintWindow 截图 + SendInput 真实键鼠输入（list_apps/get_app_state/点击/输入/按键/滚动/拖拽）。
+  en: "Windows computer-use for DeepSeek Harness: one 'computer' tool combining a UIA accessibility tree, PrintWindow screenshots, background synthetic-cursor input (UIA patterns / window messages, never steals focus) and real SendInput, with a codex-style click-through on-screen cursor indicator (soft blue glow, auto-hides after the turn)."
+  zh: "适用于 DeepSeek Harness 的 Windows 电脑操作插件：单一 computer 工具整合 UIA 无障碍树、PrintWindow 截图、后台合成输入（UIA 模式/窗口消息，不抢焦点）与真实 SendInput，并带 codex 风格点击穿透屏幕光标指示器（柔和蓝光，回合结束自动隐藏）。"
+tarball: https://github.com/JeremyWangCY/dsh-computer-use-windows/releases/download/v0.1.0-beta.1/dsh-computer-use-windows-0.1.0-beta.1.tgz
