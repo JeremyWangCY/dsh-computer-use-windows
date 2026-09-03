@@ -32,7 +32,7 @@
   "author": "JeremyWangCY",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/JeremyWangCY/PC-Pilot.git"
+    "url": "git+https://github.com/JeremyWangCY/dsh-pc-pilot.git"
   },
   "os": [
     "win32"

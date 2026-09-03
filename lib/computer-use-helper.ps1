@@ -590,6 +590,8 @@ function Do-AppState {
     $g.ReleaseHdc($hdc)
     $g.Dispose()
     if ($ok) { $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png) }
+    # ponytail: GUID shot files are unbounded — keep newest 50, self-prunes the backlog too
+    Get-ChildItem $dir -Filter 'shot-*.png' -ea SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -Skip 50 | Remove-Item -Force -ea SilentlyContinue
     $black = $false
     if ($ok -and $w -gt 4 -and $h -gt 4) {
       $px = $bmp.GetPixel([int]($w / 2), [int]($h / 2))
